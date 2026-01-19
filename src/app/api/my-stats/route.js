@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Quest from '@/models/Quest';
+import User from '@/models/User';
 
 export async function POST(request) {
     try {
@@ -9,8 +10,31 @@ export async function POST(request) {
 
         await connectDB();
 
-        const postedQuests = await Quest.find({ creator: userId }).sort({ createdAt: -1 });
-        const acceptedQuests = await Quest.find({ acceptedBy: userId }).sort({ createdAt: -1 });
+        const postedQuests = await Quest.find({ creator: userId })
+            .sort({ createdAt: -1 })
+            .populate('creator', 'name');
+
+        const acceptedQuests = await Quest.find({ acceptedBy: userId })
+            .sort({ createdAt: -1 })
+            .populate('creator', 'name');
+
+        const acceptedByIds = postedQuests
+            .map((q) => q.acceptedBy)
+            .filter(Boolean);
+
+        const acceptedUsers = acceptedByIds.length > 0
+            ? await User.find({ _id: { $in: acceptedByIds } }).select('name')
+            : [];
+
+        const acceptedUserMap = new Map(acceptedUsers.map(u => [String(u._id), u]));
+
+        const postedWithAcceptedUser = postedQuests.map((q) => {
+            const quest = q.toObject();
+            if (quest.acceptedBy) {
+                quest.acceptedByUser = acceptedUserMap.get(String(quest.acceptedBy)) || null;
+            }
+            return quest;
+        });
 
         let totalEarnings = 0;
         let lootCollected = [];
@@ -31,7 +55,7 @@ export async function POST(request) {
         return NextResponse.json({ 
             success: true, 
             data: {
-                posted: postedQuests,
+                posted: postedWithAcceptedUser,
                 accepted: acceptedQuests,
                 earnings: totalEarnings,
                 loot: lootCollected

@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [activeChatQuest, setActiveChatQuest] = useState(null);
   const [unreadByQuest, setUnreadByQuest] = useState({});
+  const [onlineCount, setOnlineCount] = useState(0);
   const pusherRef = useRef(null);
   const channelMapRef = useRef(new Map());
   
@@ -68,6 +69,46 @@ export default function Dashboard() {
       }
   }, [activeCommunity, session]);
 
+  useEffect(() => {
+    if (!session?.user?.id || activeCommunity === "Loading...") return;
+
+    let isMounted = true;
+
+    const heartbeat = async () => {
+      try {
+        await fetch("/api/online-users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ community: activeCommunity }),
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const fetchOnline = async () => {
+      try {
+        const res = await fetch(`/api/online-users?community=${encodeURIComponent(activeCommunity)}`);
+        const json = await res.json();
+        if (isMounted && res.ok) setOnlineCount(json.count || 0);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    heartbeat();
+    fetchOnline();
+
+    const heartbeatTimer = setInterval(heartbeat, 10_000);
+    const fetchTimer = setInterval(fetchOnline, 5_000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(heartbeatTimer);
+      clearInterval(fetchTimer);
+    };
+  }, [session?.user?.id, activeCommunity]);
+
   const chatQuests = useMemo(() => getChatQuests(myStats), [myStats]);
   const unreadTotal = useMemo(() => Object.values(unreadByQuest).reduce((a, b) => a + b, 0), [unreadByQuest]);
 
@@ -78,6 +119,13 @@ export default function Dashboard() {
     const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const day = date.toLocaleDateString([], { year: "numeric", month: "short", day: "2-digit" });
     return `${day} • ${time}`;
+  };
+
+  const getOtherChatName = (quest) => {
+    if (!quest || !session?.user?.id) return "Chat";
+    const isCreator = String(quest.creator?._id || quest.creator) === String(session.user.id);
+    if (isCreator) return quest.acceptedByUser?.name || "Quest Taker";
+    return quest.creator?.name || "Quest Creator";
   };
 
   useEffect(() => {
@@ -121,6 +169,7 @@ export default function Dashboard() {
       setUnreadByQuest(prev => ({ ...prev, [questId]: 0 }));
     }
   }, [activeTab, activeChatQuest]);
+
 
   function openChat(quest) {
     setActiveChatQuest(quest);
@@ -169,6 +218,14 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ questId, userId: session.user.id }),
       });
+      if (res.status === 403) {
+        const json = await res.json();
+        if (json.code === "PHONE_NOT_VERIFIED") {
+          openPhoneVerification({ type: "accept", questId });
+          setIsAccepting(null);
+          return;
+        }
+      }
       if (res.ok) fetchFeed(); 
     } catch (error) { console.error("Network Error"); }
     setIsAccepting(null);
@@ -221,6 +278,15 @@ export default function Dashboard() {
         }), 
       });
       
+      if (res.status === 403) {
+        const json = await res.json();
+        if (json.code === "PHONE_NOT_VERIFIED") {
+          setIsLoading(false);
+          openPhoneVerification({ type: "post" });
+          return;
+        }
+      }
+
       if (res.ok) {
         setIsModalOpen(false); 
         setFormData(prev => ({ 
@@ -278,7 +344,11 @@ export default function Dashboard() {
               </div>
             ) : <h2 className="text-lg font-bold tracking-tight">My Dashboard</h2>}
 
-            {activeTab === "feed" && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">● LIVE</span>}
+            {activeTab === "feed" && (
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
+                Users Online: {onlineCount}
+              </span>
+            )}
           </div>
           
           <div className="relative">
@@ -388,15 +458,15 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="flex items-start justify-center">
+              <div className="flex items-stretch justify-center min-h-[70vh]">
                 {activeChatQuest ? (
                   <QuestChat
                     questId={activeChatQuest._id}
                     currentUserId={session?.user?.id}
-                    questTitle={activeChatQuest.title}
+                    chatTitle={getOtherChatName(activeChatQuest)}
                   />
                 ) : (
-                  <div className="w-full max-w-2xl h-[500px] rounded-2xl border border-white/10 bg-slate-900/50 flex items-center justify-center text-slate-500">
+                  <div className="w-full h-full rounded-2xl border border-white/10 bg-slate-900/50 flex items-center justify-center text-slate-500">
                     Select a quest to start chatting.
                   </div>
                 )}
@@ -406,12 +476,15 @@ export default function Dashboard() {
         )}
 
         {activeTab === "feed" && (
-            <div className="p-4 border-t border-white/5 bg-slate-900/50 backdrop-blur-md">
-            <div className="flex items-center gap-2 rounded-xl bg-slate-800/50 px-4 py-3 border border-white/5">
-                <button onClick={() => { setIsModalOpen(true); setFormError(""); }} className="group flex items-center justify-center h-8 w-8 rounded-lg bg-violet-600 hover:bg-violet-500 transition text-white"><Plus className="h-5 w-5" /></button>
-                <div className="flex-1 text-sm text-slate-500">Post a quest to <span className="text-violet-400 font-bold">{activeCommunity}</span></div>
-            </div>
-            </div>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+            <button
+              onClick={() => { setIsModalOpen(true); setFormError(""); }}
+              className="h-16 w-16 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-2xl shadow-violet-500/30 border border-white/10 transition"
+              aria-label={`Post a quest to ${activeCommunity}`}
+            >
+              <Plus className="h-7 w-7" />
+            </button>
+          </div>
         )}
 
         {isModalOpen && (
@@ -439,17 +512,18 @@ export default function Dashboard() {
                         />
                     </div>
                     <div>
-                        <label className="text-xs font-medium text-amber-400 uppercase">Phone (+91)</label>
-                        <input 
-                            value={formData.phone} 
-                            onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                setFormData({...formData, phone: val});
-                            }} 
-                            type="text" 
-                            placeholder="9876543210"
-                            className="mt-1 w-full rounded-lg bg-slate-800 border border-amber-500/30 p-3 text-white outline-none focus:border-amber-500" 
-                        />
+                      <label className="text-xs font-medium text-amber-400 uppercase">Phone (+91) *</label>
+                      <input 
+                        value={formData.phone} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setFormData({...formData, phone: val});
+                        }} 
+                        type="text" 
+                        required
+                        placeholder="9876543210"
+                        className="mt-1 w-full rounded-lg bg-slate-800 border border-amber-500/30 p-3 text-white outline-none focus:border-amber-500" 
+                      />
                     </div>
                 </div>
 
@@ -474,6 +548,7 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
       </main>
     </div>
   );
@@ -489,6 +564,15 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
     const isPhoneUnlocked = Boolean(finalPhone);
 
     const creatorName = quest.creator?.name || "Anonymous Student";
+    const creatorImage = quest.creator?.image || null;
+
+    const [timeNow, setTimeNow] = useState(Date.now());
+    useEffect(() => {
+      const timer = setInterval(() => setTimeNow(Date.now()), 60_000);
+      return () => clearInterval(timer);
+    }, []);
+
+    const postedLabel = formatRelativeTime(quest.createdAt, timeNow);
 
     // Address Expansion Logic
     const [isAddressExpanded, setIsAddressExpanded] = useState(false);
@@ -500,10 +584,16 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
 
     return (
         <div className="flex gap-4 animate-in slide-in-from-bottom-2 duration-300 w-full">
-            <div className="h-10 w-10 shrink-0 rounded-full bg-violet-900/50 flex items-center justify-center font-bold text-violet-300">{quest.community ? quest.community[0] : "Q"}</div>
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-violet-900/50 flex items-center justify-center font-bold text-violet-300">
+              {creatorImage ? (
+                <Image src={creatorImage} alt={creatorName} fill className="object-cover" />
+              ) : (
+                <span>{creatorName ? creatorName[0] : "U"}</span>
+              )}
+            </div>
             
             <div className="flex-1 w-full max-w-md">
-                <div className="flex items-baseline gap-2"><span className="font-bold text-slate-200">{creatorName}</span><span className="text-xs text-slate-500">Just now</span></div>
+                <div className="flex items-baseline gap-2"><span className="font-bold text-slate-200">{creatorName}</span><span className="text-xs text-slate-500">{postedLabel}</span></div>
                 
                 <div className="mt-2 w-full rounded-2xl border border-violet-500/30 bg-slate-900/80 p-5 backdrop-blur-md shadow-2xl shadow-violet-900/10 overflow-hidden">
                     <div className="mb-3 flex justify-between items-center">
@@ -611,4 +701,24 @@ function getChatQuests(myStats) {
     unique.set(String(q._id), q);
   });
   return Array.from(unique.values()).filter((q) => q.status === "IN_PROGRESS" || q.status === "COMPLETED");
+}
+
+function formatRelativeTime(dateValue, nowMs) {
+  if (!dateValue) return "Posted just now";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "Posted just now";
+  const diffMs = Math.max(0, nowMs - date.getTime());
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return "Posted just now";
+  if (diffMinutes === 1) return "Posted 1 min ago";
+  if (diffMinutes < 60) return `Posted ${diffMinutes} mins ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours === 1) return "Posted 1 hour ago";
+  if (diffHours < 24) return `Posted ${diffHours} hours ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Posted 1 day ago";
+  return `Posted ${diffDays} days ago`;
 }

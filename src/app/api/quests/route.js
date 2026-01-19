@@ -14,10 +14,10 @@ export async function GET(request) {
     let query = {};
     if (community) query.community = community;
 
-    // Populate creator to get the real name
+    // Populate creator to get the real name and image
     const quests = await Quest.find(query)
         .sort({ createdAt: -1 }) // Sort by newest (using createdAt is better than _id)
-        .populate('creator', 'name'); 
+        .populate('creator', 'name image'); 
 
     const sanitizedQuests = quests.map(quest => {
         const q = quest.toObject();
@@ -35,7 +35,6 @@ export async function GET(request) {
         const parts = fullContact.split(" • ");
         const realLocation = parts[0] || ""; 
         const realPhone = parts.length > 1 ? parts[1] : "";
-
         // 3. APPLY STRICT PRIVACY RULES
         
         // ADDRESS RULE:
@@ -104,6 +103,7 @@ export async function POST(request) {
     if (!title || !description || !contact) {
         return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
     }
+
 
     let displayString = "";
     if (cash > 0) displayString += `₹${cash}`;

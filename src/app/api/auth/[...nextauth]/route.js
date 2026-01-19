@@ -23,6 +23,9 @@ export const authOptions = {
         
         const user = await User.findOne({ email: credentials.email });
         if (!user) throw new Error("No user found with this email");
+        if (user.provider === "credentials" && !user.emailVerified) {
+          throw new Error("Email not verified");
+        }
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) throw new Error("Incorrect password");
@@ -41,9 +44,9 @@ export const authOptions = {
         // This ensures if they just selected a college, the session updates
         await connectDB();
         const freshUser = await User.findById(session.user.id);
-        if (freshUser && freshUser.community) {
+           if (freshUser && freshUser.community) {
              session.user.community = freshUser.community;
-        }
+           }
         // -----------------------------
       }
       return session;
@@ -78,7 +81,11 @@ export const authOptions = {
             email: user.email,
             image: user.image,
             provider: "google",
+            emailVerified: true,
           });
+        } else if (!existingUser.emailVerified) {
+          existingUser.emailVerified = true;
+          await existingUser.save();
         }
       }
       return true;

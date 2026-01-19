@@ -9,6 +9,9 @@ const UserSchema = new mongoose.Schema(
     community: { type: String }, // <--- STORES "IIT Delhi"
     image: { type: String },
     provider: { type: String, default: "credentials" },
+    emailVerified: { type: Boolean, default: false },
+    emailOtpHash: { type: String },
+    emailOtpExpires: { type: Date },
   },
   { timestamps: true }
 );

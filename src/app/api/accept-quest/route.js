@@ -12,6 +12,7 @@ export async function POST(request) {
 
         await connectDB();
 
+
         // 1. Find the quest
         const quest = await Quest.findById(questId);
 

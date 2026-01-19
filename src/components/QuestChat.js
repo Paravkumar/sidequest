@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import Pusher from "pusher-js";
 import { Send } from "lucide-react";
 
-export default function QuestChat({ questId, currentUserId, questTitle }) {
+export default function QuestChat({ questId, currentUserId, chatTitle }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef(null);
@@ -68,9 +68,9 @@ export default function QuestChat({ questId, currentUserId, questTitle }) {
   };
 
   return (
-    <div className="flex flex-col h-[500px] w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
       <div className="p-4 bg-slate-900/80 border-b border-white/10 text-white font-bold">
-        Chat: {questTitle}
+        {chatTitle}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950">

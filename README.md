@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🚀 SideQuest: The Future of Student Earning
 
-## Getting Started
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://sidequest.engineer)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-green?style=for-the-badge&logo=mongodb)](https://www.mongodb.com/)
 
-First, run the development server:
+**SideQuest** is a decentralized campus marketplace built exclusively for students to turn their spare time into real cash. Whether it's delivering a lab report or grabbing a coffee for a peer, SideQuest facilitates a hyper-local economy within the campus walls.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+[**Explore the App »**](https://sidequest.engineer)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## ✨ Key Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **📍 Campus-Locked Economy**: Only students with verified college emails can join the marketplace.
+- **💸 Instant Earning**: Complete simple "Quests" like delivering assignments or providing tech support for cash or "loot" (like a Milky Bar!).
+- **🔒 Privacy First**: Contact details and exact locations are hidden from the public and only revealed once a student accepts a quest.
+- **🛡️ Safe Environment**: Integrated server-side profanity filters to keep the community professional and safe.
+- **📱 Real-time Feed**: A live-updating dashboard of quests available in your specific community (e.g., IIT Delhi).
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Frontend**: Next.js 15 (App Router), Tailwind CSS, Lucide Icons.
+- **Backend**: Next.js API Routes (Serverless).
+- **Database**: MongoDB Atlas with Mongoose.
+- **Authentication**: NextAuth.js (Credentials Provider).
+- **Mobile**: React Native with Expo (Currently in development).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🚀 Getting Started
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Prerequisites
+- Node.js 18.x or later
+- A MongoDB Atlas cluster
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone [https://github.com/YOUR_USERNAME/sidequest.git](https://github.com/YOUR_USERNAME/sidequest.git)
+   cd sidequest

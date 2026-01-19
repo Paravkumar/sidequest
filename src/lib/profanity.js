@@ -1,17 +1,25 @@
-import Filter from 'bad-words';
+// Use curly braces for the import because it's a named export in this version
+import { Filter } from 'bad-words';
 
 const filter = new Filter();
 
 // Add custom words to ban (e.g., "sex", "hookup")
-// The library already blocks standard swears like "fuck", "shit", etc.
-filter.addWords('sex', 'hookup', 'nudes', 'weed', 'drugs'); 
+filter.addWords('sex', 'hookup', 'nudes', 'weed', 'drugs','lund','gand','chut','chutad','chutiya','gandu','loda'); 
 
 export function isProfane(text) {
   if (!text) return false;
-  return filter.isProfane(text);
+  try {
+    return filter.isProfane(text);
+  } catch (e) {
+    return false; // Safety fallback
+  }
 }
 
 export function cleanText(text) {
   if (!text) return "";
-  return filter.clean(text); // Replaces bad words with asterisks (****)
+  try {
+    return filter.clean(text); 
+  } catch (e) {
+    return text; // Safety fallback
+  }
 }

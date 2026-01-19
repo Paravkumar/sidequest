@@ -5,7 +5,7 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 
-const handler = NextAuth({
+export const authOptions = {
   session: { strategy: "jwt" },
   providers: [
     GoogleProvider({
@@ -33,14 +33,14 @@ const handler = NextAuth({
   ],
   callbacks: {
     async session({ session, token }) {
-      if (token.sub) {
-        session.user.id = token.sub;
+      if (token.userId || token.sub) {
+        session.user.id = token.userId || token.sub;
         session.user.phone = token.phone; 
         
         // --- FETCH FRESH COMMUNITY ---
         // This ensures if they just selected a college, the session updates
         await connectDB();
-        const freshUser = await User.findById(token.sub);
+        const freshUser = await User.findById(session.user.id);
         if (freshUser && freshUser.community) {
              session.user.community = freshUser.community;
         }
@@ -52,7 +52,20 @@ const handler = NextAuth({
       if (user) {
         token.phone = user.phone;
         token.community = user.community;
+        token.userId = user.id || user._id;
+        token.email = user.email || token.email;
       }
+
+      if (!token.userId && token.email) {
+        await connectDB();
+        const dbUser = await User.findOne({ email: token.email });
+        if (dbUser) {
+          token.userId = dbUser._id;
+          token.phone = dbUser.phone || token.phone;
+          token.community = dbUser.community || token.community;
+        }
+      }
+
       return token;
     },
     async signIn({ user, account }) {
@@ -72,6 +85,8 @@ const handler = NextAuth({
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

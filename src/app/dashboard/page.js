@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession, signOut } from "next-auth/react"; 
 import { useRouter } from "next/navigation";
 import Image from "next/image"; // <--- IMPORT ADDED
-import { X, ArrowRight, Plus, Loader2, CheckCircle, Wallet, Gift, LogOut, MapPin, Phone, User, ChevronDown, ChevronUp, Lock, Globe, Home, UserCircle } from "lucide-react";
+import { X, ArrowRight, Plus, Loader2, CheckCircle, Wallet, Gift, LogOut, MapPin, Phone, User, ChevronDown, ChevronUp, Lock, Globe, Home, UserCircle, MessageSquare } from "lucide-react";
 import confetti from "canvas-confetti"; 
+import QuestChat from "@/components/QuestChat";
+import Pusher from "pusher-js";
 
 export default function Dashboard() {
   const { data: session, status } = useSession(); 
@@ -15,6 +17,10 @@ export default function Dashboard() {
   const [activeCommunity, setActiveCommunity] = useState("Loading..."); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [activeChatQuest, setActiveChatQuest] = useState(null);
+  const [unreadByQuest, setUnreadByQuest] = useState({});
+  const pusherRef = useRef(null);
+  const channelMapRef = useRef(new Map());
   
   const [feedQuests, setFeedQuests] = useState([]); 
   const [myStats, setMyStats] = useState({ posted: [], accepted: [], earnings: 0, loot: [] });
@@ -39,28 +45,88 @@ export default function Dashboard() {
     }
   }, [status, router]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (session?.user?.id) {
-        if (session.user.community) {
-            setActiveCommunity(session.user.community);
-        } else {
-            router.push("/select-college");
-        }
+      if (session.user.community) {
+        setActiveCommunity(session.user.community);
+      } else {
+        router.push("/select-college");
+      }
         
-        if (session.user.phone) {
-            const rawPhone = session.user.phone.replace("+91 ", "");
-            setFormData(prev => ({ ...prev, phone: rawPhone }));
-        }
+      if (session.user.phone) {
+        const rawPhone = session.user.phone.replace("+91 ", "");
+        setFormData(prev => ({ ...prev, phone: rawPhone }));
+      }
 
-        if(activeTab === "profile") fetchMyStats();
+      if(activeTab === "profile" || activeTab === "chat") fetchMyStats();
     }
-  }, [session, activeTab]);
+    }, [session, activeTab]);
 
   useEffect(() => {
       if(session?.user?.id && activeCommunity !== "Loading...") {
           fetchFeed();
       }
   }, [activeCommunity, session]);
+
+  const chatQuests = useMemo(() => getChatQuests(myStats), [myStats]);
+  const unreadTotal = useMemo(() => Object.values(unreadByQuest).reduce((a, b) => a + b, 0), [unreadByQuest]);
+
+  const formatChatTimestamp = (quest) => {
+    if (!quest?.updatedAt) return "";
+    const date = new Date(quest.updatedAt);
+    if (Number.isNaN(date.getTime())) return "";
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const day = date.toLocaleDateString([], { year: "numeric", month: "short", day: "2-digit" });
+    return `${day} • ${time}`;
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id || chatQuests.length === 0) return;
+
+    if (!pusherRef.current) {
+      pusherRef.current = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
+        cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
+      });
+    }
+
+    const pusher = pusherRef.current;
+    const activeIds = new Set(chatQuests.map(q => String(q._id)));
+
+    chatQuests.forEach((quest) => {
+      const questId = String(quest._id);
+      if (channelMapRef.current.has(questId)) return;
+
+      const channel = pusher.subscribe(`chat-${questId}`);
+      channel.bind("new-message", (data) => {
+        if (String(data.sender) === String(session.user.id)) return;
+        if (activeTab === "chat" && activeChatQuest?._id && String(activeChatQuest._id) === questId) return;
+        setUnreadByQuest(prev => ({ ...prev, [questId]: (prev[questId] || 0) + 1 }));
+      });
+
+      channelMapRef.current.set(questId, channel);
+    });
+
+    for (const [questId, channel] of channelMapRef.current.entries()) {
+      if (!activeIds.has(questId)) {
+        channel.unbind_all();
+        pusher.unsubscribe(`chat-${questId}`);
+        channelMapRef.current.delete(questId);
+      }
+    }
+  }, [chatQuests, session?.user?.id, activeTab, activeChatQuest]);
+
+  useEffect(() => {
+    if (activeTab === "chat" && activeChatQuest?._id) {
+      const questId = String(activeChatQuest._id);
+      setUnreadByQuest(prev => ({ ...prev, [questId]: 0 }));
+    }
+  }, [activeTab, activeChatQuest]);
+
+  function openChat(quest) {
+    setActiveChatQuest(quest);
+    setActiveTab("chat");
+    setUnreadByQuest(prev => ({ ...prev, [String(quest._id)]: 0 }));
+  }
 
   async function fetchFeed() {
     if (!session?.user?.id) return;
@@ -192,6 +258,7 @@ export default function Dashboard() {
             
             <div className="flex flex-col gap-4">
                 <button onClick={() => setActiveTab("feed")}><SidebarIcon icon={<Home className="h-6 w-6" />} active={activeTab === "feed"} /></button>
+                <button onClick={() => setActiveTab("chat")}><SidebarIcon icon={<MessageSquare className="h-6 w-6" />} active={activeTab === "chat"} badge={unreadTotal} /></button>
             </div>
         </div>
       </aside>
@@ -204,6 +271,11 @@ export default function Dashboard() {
                     <Globe className="h-5 w-5 text-violet-400" />
                     {activeCommunity}
                 </div>
+            ) : activeTab === "chat" ? (
+              <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <MessageSquare className="h-5 w-5 text-violet-400" />
+                Chats
+              </div>
             ) : <h2 className="text-lg font-bold tracking-tight">My Dashboard</h2>}
 
             {activeTab === "feed" && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">● LIVE</span>}
@@ -237,7 +309,7 @@ export default function Dashboard() {
         {activeTab === "feed" && (
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {feedQuests.map((quest) => (
-              <QuestCard key={quest._id} quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} />
+              <QuestCard key={quest._id} quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} onOpenChat={openChat} />
             ))}
             {feedQuests.length === 0 && <div className="text-center text-slate-500 mt-10">No quests yet in {activeCommunity}.<br/>Be the first to post!</div>}
           </div>
@@ -278,6 +350,56 @@ export default function Dashboard() {
                      </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "chat" && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="grid lg:grid-cols-[320px_1fr] gap-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Your Chats</h3>
+                <div className="space-y-2">
+                  {chatQuests.map((quest) => (
+                    <button
+                      key={quest._id}
+                      onClick={() => openChat(quest)}
+                      className={`w-full text-left p-4 rounded-xl border transition ${activeChatQuest?._id === quest._id ? "bg-violet-600/20 border-violet-500/40" : "bg-slate-900 border-white/5 hover:border-violet-500/30"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold text-slate-200 truncate">{quest.title}</div>
+                        {unreadByQuest[String(quest._id)] > 0 && (
+                          <span className="text-[10px] font-bold bg-violet-600 text-white px-2 py-0.5 rounded-full">
+                            {unreadByQuest[String(quest._id)]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 flex items-center justify-between gap-2">
+                        <span>{quest.status === "IN_PROGRESS" ? "Active" : quest.status}</span>
+                        {quest.status === "IN_PROGRESS" && <span>Accepted: {formatChatTimestamp(quest)}</span>}
+                        {quest.status === "COMPLETED" && <span>Completed: {formatChatTimestamp(quest)}</span>}
+                      </div>
+                    </button>
+                  ))}
+                  {chatQuests.length === 0 && (
+                    <div className="text-sm text-slate-500">No chats yet. Accept a quest to start messaging.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start justify-center">
+                {activeChatQuest ? (
+                  <QuestChat
+                    questId={activeChatQuest._id}
+                    currentUserId={session?.user?.id}
+                    questTitle={activeChatQuest.title}
+                  />
+                ) : (
+                  <div className="w-full max-w-2xl h-[500px] rounded-2xl border border-white/10 bg-slate-900/50 flex items-center justify-center text-slate-500">
+                    Select a quest to start chatting.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -357,7 +479,7 @@ export default function Dashboard() {
   );
 }
 
-function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting }) {
+function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, onOpenChat }) {
     const isCreator = String(quest.creator?._id || quest.creator) === String(currentUserId);
     const isAcceptedByMe = String(quest.acceptedBy) === String(currentUserId);
     
@@ -441,6 +563,12 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting }) 
                             {quest.status === "IN_PROGRESS" && isCreator && <button onClick={() => onComplete(quest._id)} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500">Mark Done <CheckCircle className="h-3 w-3" /></button>}
                             {quest.status === "IN_PROGRESS" && !isCreator && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-400 border border-white/10">Taken ⏳</span>}
                             {quest.status === "COMPLETED" && <span className="flex items-center gap-2 rounded-lg bg-emerald-900/30 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">Completed 🎉</span>}
+
+                            {(quest.status === "IN_PROGRESS" || quest.status === "COMPLETED") && (isCreator || isAcceptedByMe) && (
+                              <button onClick={() => onOpenChat(quest)} className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200 border border-white/10 hover:bg-slate-700">
+                                <MessageSquare className="h-3 w-3" /> Message
+                              </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -461,6 +589,26 @@ function MiniQuestCard({ quest }) {
     );
 }
 
-function SidebarIcon({ icon, active }) {
-  return <div className={`flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white"}`}>{icon}</div>;
+function SidebarIcon({ icon, active, badge = 0 }) {
+  return (
+    <div className={`relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white"}`}>
+      {icon}
+      {badge > 0 && (
+        <span className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function getChatQuests(myStats) {
+  const posted = myStats.posted || [];
+  const accepted = myStats.accepted || [];
+  const combined = [...posted, ...accepted];
+  const unique = new Map();
+  combined.forEach((q) => {
+    unique.set(String(q._id), q);
+  });
+  return Array.from(unique.values()).filter((q) => q.status === "IN_PROGRESS" || q.status === "COMPLETED");
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image"; // <--- Added Image Import
+import logo from "@/app/icon.png";
 import { ArrowRight, CheckCircle, Wallet, Shield, Zap, Gift, MapPin } from "lucide-react";
 
 export default function LandingPage() {
@@ -11,14 +12,14 @@ export default function LandingPage() {
       {/* NAVBAR */}
       <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 font-bold text-xl tracking-tight">
+          <div className="flex items-center gap-2 font-bold text-xl tracking-tight leading-none">
             {/* --- UPDATED LOGO HERE --- */}
-            <div className="relative h-10 w-10 shadow-lg shadow-violet-500/20 rounded-xl overflow-hidden">
+            <div className="relative h-9 w-9 rounded-lg overflow-hidden">
                 <Image 
-                    src="/icon.png" // Ensure icon.png is in your 'public' folder
+                    src={logo}
                     alt="SideQuest Logo" 
                     fill
-                    className="object-cover"
+                    className="object-contain"
                 />
             </div>
             {/* ------------------------- */}

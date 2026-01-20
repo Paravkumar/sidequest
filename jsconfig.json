@@ -3,5 +3,12 @@
     "paths": {
       "@/*": ["./src/*"]
     }
-  }
+  },
+  "exclude": [
+    "node_modules",
+    ".next",
+    "src/app/api/auth/request-phone-otp",
+    "src/app/api/auth/verify-phone-otp",
+    "src/lib/sms.js"
+  ]
 }

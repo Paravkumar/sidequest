@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
+import Image from "next/image";
+import logo from "@/app/icon.png";
 
 const PHONE_PREFIX = "+91 ";
 const normalizePhoneDigits = (input) => {
@@ -152,7 +154,9 @@ function LoginContent() {
   return (
     <div className="w-full max-w-md bg-slate-900 border border-white/10 p-8 rounded-2xl shadow-2xl">
         <div className="text-center mb-8">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg mb-4">SQ</div>
+          <div className="mx-auto mb-4 h-12 w-12 rounded-xl overflow-hidden">
+            <Image src={logo} alt="SideQuest Logo" width={48} height={48} className="object-contain" />
+          </div>
           <h1 className="text-2xl font-bold text-white">{isRegistering ? "Create Account" : "Welcome Back"}</h1>
           <p className="text-slate-400 text-sm mt-2">Enter your credentials to continue</p>
         </div>

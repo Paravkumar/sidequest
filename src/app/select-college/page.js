@@ -1,18 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import logo from "@/app/icon.png";
 import { Search, MapPin, CheckCircle, Loader2, Mail } from "lucide-react";
 
 const COLLEGES = ["IIT Delhi"];
 
 export default function SelectCollege() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const { data: session, status, update } = useSession();
   
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
 
   const filteredColleges = COLLEGES.filter(c => c.toLowerCase().includes(search.toLowerCase()));
 
@@ -25,14 +35,29 @@ export default function SelectCollege() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: session.user.id, community: selected }),
       });
-      if (res.ok) window.location.href = "/dashboard"; 
+      if (res.ok) {
+        await update();
+        router.replace("/dashboard");
+      }
     } catch (error) { setIsLoading(false); }
   }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") return null;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans text-white">
       <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg mb-4">SQ</div>
+        <div className="mx-auto mb-4 h-12 w-12 rounded-xl overflow-hidden">
+          <Image src={logo} alt="SideQuest Logo" width={48} height={48} className="object-contain" />
+        </div>
         <h1 className="text-3xl font-bold">Find Your Campus</h1>
         <p className="text-slate-400 mt-2">Where will you be questing today?</p>
       </div>

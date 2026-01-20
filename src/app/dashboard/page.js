@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession, signOut } from "next-auth/react"; 
 import { useRouter } from "next/navigation";
 import Image from "next/image"; // <--- IMPORT ADDED
+import logo from "@/app/icon.png";
 import { X, ArrowRight, Plus, Loader2, CheckCircle, Wallet, Gift, LogOut, MapPin, Phone, User, ChevronDown, ChevronUp, Lock, Globe, Home, UserCircle, MessageSquare } from "lucide-react";
 import confetti from "canvas-confetti"; 
 import QuestChat from "@/components/QuestChat";
@@ -317,8 +318,8 @@ export default function Dashboard() {
       <aside className="hidden w-20 flex-col items-center border-r border-white/5 bg-slate-900 py-6 md:flex justify-between">
         <div>
             {/* --- UPDATED SIDEBAR LOGO --- */}
-            <div className="mb-8 relative h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-violet-500/20">
-                <Image src="/icon.png" alt="SideQuest Logo" fill className="object-cover" />
+            <div className="mb-8 relative h-9 w-9 rounded-lg overflow-hidden">
+              <Image src={logo} alt="SideQuest Logo" fill className="object-contain" />
             </div>
             {/* ---------------------------- */}
             

@@ -18,7 +18,7 @@ const normalizePhoneDigits = (input) => {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [isRegistering, setIsRegistering] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
@@ -234,7 +234,10 @@ function LoginContent() {
               {isVerifyingOtp ? <Loader2 className="animate-spin" /> : "Verify Email"}
             </button>
           ) : (
-            <button disabled={isLoading} className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition disabled:opacity-50 flex justify-center">
+            <button
+              disabled={isLoading}
+              className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition disabled:opacity-50 flex justify-center"
+            >
               {isLoading ? <Loader2 className="animate-spin" /> : (isRegistering ? "Sign Up" : "Login")}
             </button>
           )}
@@ -253,7 +256,7 @@ function LoginContent() {
 // MAIN PAGE COMPONENT
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+    <div className="min-h-[100svh] flex items-center justify-center bg-slate-950 px-4 py-10">
       <Suspense fallback={<div className="text-violet-500"><Loader2 className="animate-spin h-8 w-8" /></div>}>
         <LoginContent />
       </Suspense>

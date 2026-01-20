@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false); 
   const [isAccepting, setIsAccepting] = useState(null); 
   const [formError, setFormError] = useState("");
+  const [hideOnboarding, setHideOnboarding] = useState(false);
+
 
   const [formData, setFormData] = useState({
     title: "",
@@ -47,7 +49,14 @@ export default function Dashboard() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hidden = window.localStorage.getItem("hideOnboarding");
+    setHideOnboarding(hidden === "true");
+  }, []);
+
     useEffect(() => {
+    if (status !== "authenticated") return;
     if (session?.user?.id) {
       if (session.user.community) {
         setActiveCommunity(session.user.community);
@@ -62,15 +71,17 @@ export default function Dashboard() {
 
       if(activeTab === "profile" || activeTab === "chat") fetchMyStats();
     }
-    }, [session, activeTab]);
+    }, [session, activeTab, status, router]);
 
-  useEffect(() => {
+    useEffect(() => {
+      if (status !== "authenticated") return;
       if(session?.user?.id && activeCommunity !== "Loading...") {
-          fetchFeed();
+        fetchFeed();
       }
-  }, [activeCommunity, session]);
+    }, [activeCommunity, session, status]);
 
   useEffect(() => {
+    if (status !== "authenticated") return;
     if (!session?.user?.id || activeCommunity === "Loading...") return;
 
     let isMounted = true;
@@ -108,7 +119,7 @@ export default function Dashboard() {
       clearInterval(heartbeatTimer);
       clearInterval(fetchTimer);
     };
-  }, [session?.user?.id, activeCommunity]);
+  }, [session?.user?.id, activeCommunity, status]);
 
   const chatQuests = useMemo(() => getChatQuests(myStats), [myStats]);
   const unreadTotal = useMemo(() => Object.values(unreadByQuest).reduce((a, b) => a + b, 0), [unreadByQuest]);
@@ -313,7 +324,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden font-sans">
+    <div className="flex h-[100svh] bg-slate-950 text-white overflow-hidden font-sans">
       
       <aside className="hidden w-20 flex-col items-center border-r border-white/5 bg-slate-900 py-6 md:flex justify-between">
         <div>
@@ -324,11 +335,11 @@ export default function Dashboard() {
             {/* ---------------------------- */}
             
             <div className="flex flex-col gap-4">
-                <button onClick={() => setActiveTab("feed")}><SidebarIcon icon={<Home className="h-6 w-6" />} active={activeTab === "feed"} /></button>
-                <button onClick={() => setActiveTab("chat")}><SidebarIcon icon={<MessageSquare className="h-6 w-6" />} active={activeTab === "chat"} badge={unreadTotal} /></button>
+              <button onClick={() => setActiveTab("feed")}><SidebarIcon icon={<Home className="h-6 w-6" />} active={activeTab === "feed"} /></button>
+              <button onClick={() => setActiveTab("chat")}><SidebarIcon icon={<MessageSquare className="h-6 w-6" />} active={activeTab === "chat"} badge={unreadTotal} /></button>
             </div>
         </div>
-      </aside>
+          </aside>
 
       <main className="flex flex-1 flex-col relative">
         <header className="flex h-16 items-center justify-between border-b border-white/5 bg-slate-900/50 px-6 backdrop-blur-md">
@@ -364,7 +375,7 @@ export default function Dashboard() {
              {isProfileMenuOpen && (
                 <>
                 <div className="fixed inset-0 z-10" onClick={() => setIsProfileMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20">
                     <button onClick={() => { setActiveTab("profile"); setIsProfileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition">
                         <UserCircle className="h-4 w-4" /> My Profile
                     </button>
@@ -375,12 +386,74 @@ export default function Dashboard() {
                 </>
              )}
           </div>
-        </header>
+            </header>
 
         {activeTab === "feed" && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 dashboard-feed-bg">
+            {!hideOnboarding && (
+              <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 backdrop-blur-md">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Get started in 3 quick steps</h3>
+                    <p className="text-sm text-slate-400">Finish onboarding to unlock the best experience.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setHideOnboarding(true);
+                      if (typeof window !== "undefined") window.localStorage.setItem("hideOnboarding", "true");
+                    }}
+                    className="text-xs font-bold text-slate-400 hover:text-white transition"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+
+                <div className="mt-4 grid md:grid-cols-3 gap-4">
+                  <div className={`rounded-xl border p-4 ${session?.user?.community ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-slate-900/60"}`}>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Step 1</div>
+                    <div className="mt-1 font-bold text-white">Choose your campus</div>
+                    <div className="text-xs text-slate-400 mt-2">Select your community to see local quests.</div>
+                    <div className="mt-3">
+                      {session?.user?.community ? (
+                        <span className="text-xs font-bold text-emerald-400">Completed</span>
+                      ) : (
+                        <button onClick={() => router.push("/select-college")} className="text-xs font-bold text-violet-400 hover:text-violet-300">Select now</button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`rounded-xl border p-4 ${(myStats.posted?.length || 0) > 0 ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-slate-900/60"}`}>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Step 2</div>
+                    <div className="mt-1 font-bold text-white">Post your first quest</div>
+                    <div className="text-xs text-slate-400 mt-2">Create a quick task to start earning.</div>
+                    <div className="mt-3">
+                      {(myStats.posted?.length || 0) > 0 ? (
+                        <span className="text-xs font-bold text-emerald-400">Completed</span>
+                      ) : (
+                        <button onClick={() => { setIsModalOpen(true); setFormError(""); }} className="text-xs font-bold text-violet-400 hover:text-violet-300">Create quest</button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`rounded-xl border p-4 ${(myStats.accepted?.length || 0) > 0 ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-slate-900/60"}`}>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Step 3</div>
+                    <div className="mt-1 font-bold text-white">Accept a quest</div>
+                    <div className="text-xs text-slate-400 mt-2">Help someone and get rewarded.</div>
+                    <div className="mt-3">
+                      {(myStats.accepted?.length || 0) > 0 ? (
+                        <span className="text-xs font-bold text-emerald-400">Completed</span>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">Pick one below</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {feedQuests.map((quest) => (
-              <QuestCard key={quest._id} quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} onOpenChat={openChat} />
+              <div key={quest._id}>
+                <QuestCard quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} onOpenChat={openChat} />
+              </div>
             ))}
             {feedQuests.length === 0 && <div className="text-center text-slate-500 mt-10">No quests yet in {activeCommunity}.<br/>Be the first to post!</div>}
           </div>
@@ -389,18 +462,18 @@ export default function Dashboard() {
         {activeTab === "profile" && (
           <div className="flex-1 overflow-y-auto p-6 space-y-8">
             <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-gradient-to-br from-emerald-900/50 to-slate-900 border border-emerald-500/30 p-6">
+              <div className="rounded-2xl bg-gradient-to-br from-emerald-900/50 to-slate-900 border border-emerald-500/30 p-6">
                     <div className="flex items-center gap-2 mb-2 text-emerald-400"><Wallet className="h-5 w-5" /><span className="font-bold text-xs tracking-wider uppercase">Cash Earned</span></div>
                     <h1 className="text-3xl font-bold text-white">₹{myStats.earnings}</h1>
-                </div>
-                <div className="rounded-2xl bg-gradient-to-br from-fuchsia-900/50 to-slate-900 border border-fuchsia-500/30 p-6">
+              </div>
+              <div className="rounded-2xl bg-gradient-to-br from-fuchsia-900/50 to-slate-900 border border-fuchsia-500/30 p-6">
                     <div className="flex items-center gap-2 mb-2 text-fuchsia-400"><Gift className="h-5 w-5" /><span className="font-bold text-xs tracking-wider uppercase">Loot Bag</span></div>
                     {myStats.loot && myStats.loot.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-2">
                             {myStats.loot.map((item, i) => <span key={i} className="text-xs bg-fuchsia-500/20 text-fuchsia-200 px-2 py-1 rounded-md border border-fuchsia-500/20">{item}</span>)}
                         </div>
                     ) : <div className="text-slate-500 text-xs mt-1">No items collected.</div>}
-                </div>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
@@ -427,9 +500,9 @@ export default function Dashboard() {
         )}
 
         {activeTab === "chat" && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 dashboard-feed-bg">
             <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-              <div className="space-y-4">
+              <div className="space-y-4 dashboard-feed-bg rounded-2xl p-4 border border-white/5">
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Your Chats</h3>
                 <div className="space-y-2">
                   {chatQuests.map((quest) => (
@@ -682,7 +755,7 @@ function MiniQuestCard({ quest }) {
 
 function SidebarIcon({ icon, active, badge = 0 }) {
   return (
-    <div className={`relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white"}`}>
+    <div className={`relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600 shadow-[0_0_18px_rgba(139,92,246,0.45)]" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white hover:shadow-[0_0_18px_rgba(139,92,246,0.35)]"}`}>
       {icon}
       {badge > 0 && (
         <span className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">

@@ -341,7 +341,7 @@ export default function Dashboard() {
         </div>
           </aside>
 
-      <main className="flex flex-1 flex-col relative">
+      <main className="flex flex-1 flex-col relative pb-24 md:pb-0">
         <header className="flex h-16 items-center justify-between border-b border-white/5 bg-slate-900/50 px-6 backdrop-blur-md">
           <div className="flex items-center gap-4 relative">
             {activeTab === "feed" ? (
@@ -550,7 +550,7 @@ export default function Dashboard() {
         )}
 
         {activeTab === "feed" && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 hidden md:block">
             <button
               onClick={() => { setIsModalOpen(true); setFormError(""); }}
               className="h-16 w-16 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-2xl shadow-violet-500/30 border border-white/10 transition"
@@ -560,6 +560,45 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        {/* Mobile bottom nav */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden px-4 pb-[max(env(safe-area-inset-bottom),12px)]">
+          <div className="relative h-16 rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-md shadow-2xl">
+            <div className="absolute inset-0 flex items-center justify-between px-6">
+              <button
+                onClick={() => setActiveTab("feed")}
+                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "feed" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
+                aria-label="Feed"
+              >
+                <Home className="h-5 w-5" />
+              </button>
+
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "chat" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
+                aria-label="Chat"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </button>
+
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "profile" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
+                aria-label="Profile"
+              >
+                <UserCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => { setIsModalOpen(true); setFormError(""); }}
+              className="absolute left-1/2 -translate-x-1/2 -top-12 h-14 w-14 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-2xl shadow-violet-500/30 border border-white/10"
+              aria-label={`Post a quest to ${activeCommunity}`}
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
 
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">

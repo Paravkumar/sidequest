@@ -39,6 +39,7 @@ export const authOptions = {
       if (token.userId || token.sub) {
         session.user.id = token.userId || token.sub;
         session.user.phone = token.phone; 
+        session.user.email = token.email;
         
         // --- FETCH FRESH COMMUNITY ---
         // This ensures if they just selected a college, the session updates

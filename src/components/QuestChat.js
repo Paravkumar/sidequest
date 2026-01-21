@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import Pusher from "pusher-js";
 import { Send } from "lucide-react";
 
-export default function QuestChat({ questId, currentUserId, chatTitle, isGroup = false, participantCount = 0, creatorId = "" }) {
+export default function QuestChat({ questId, currentUserId, chatTitle, isGroup = false, participantCount = 0, creatorId = "", isClosed = false }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef(null);
@@ -53,6 +53,7 @@ export default function QuestChat({ questId, currentUserId, chatTitle, isGroup =
   // 3. Send Message function
   const sendMessage = async (e) => {
     e.preventDefault();
+    if (isClosed) return;
     if (!input.trim()) return;
 
     const res = await fetch("/api/chat/send", {
@@ -102,18 +103,24 @@ export default function QuestChat({ questId, currentUserId, chatTitle, isGroup =
         <div ref={scrollRef} />
       </div>
 
-      <form onSubmit={sendMessage} className="p-4 bg-slate-900 border-t border-white/10 flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 bg-slate-800 border border-white/10 rounded-full px-4 py-2 text-sm text-white focus:ring-2 focus:ring-violet-500 outline-none"
-        />
-        <button type="submit" className="bg-violet-600 text-white p-2 rounded-full hover:bg-violet-500 transition">
-          <Send size={18} />
-        </button>
-      </form>
+      {isClosed ? (
+        <div className="p-4 bg-slate-900 border-t border-white/10 text-xs text-slate-400">
+          Chat closed. This quest is completed and messages are read-only.
+        </div>
+      ) : (
+        <form onSubmit={sendMessage} className="p-4 bg-slate-900 border-t border-white/10 flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 bg-slate-800 border border-white/10 rounded-full px-4 py-2 text-sm text-white focus:ring-2 focus:ring-violet-500 outline-none"
+          />
+          <button type="submit" className="bg-violet-600 text-white p-2 rounded-full hover:bg-violet-500 transition">
+            <Send size={18} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from "next-auth";
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import Quest from '@/models/Quest';
 // 1. IMPORT THE FILTER
@@ -137,4 +139,98 @@ export async function POST(request) {
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
+}
+
+export async function DELETE(request) {
+    try {
+        await connectDB();
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.email) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase();
+        if (!adminEmail || session.user.email.toLowerCase() !== adminEmail) {
+            return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const questId = searchParams.get("questId");
+        if (!questId) {
+            return NextResponse.json({ success: false, error: "Missing questId" }, { status: 400 });
+        }
+
+        await Quest.findByIdAndDelete(questId);
+        return NextResponse.json({ success: true }, { status: 200 });
+    } catch (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+}
+
+export async function PATCH(request) {
+    try {
+        await connectDB();
+        const body = await request.json();
+        const { questId, userId } = body;
+
+        if (!questId || !userId) {
+            return NextResponse.json({ success: false, error: "Missing questId or userId" }, { status: 400 });
+        }
+
+        const quest = await Quest.findById(questId);
+        if (!quest) {
+            return NextResponse.json({ success: false, error: "Quest not found" }, { status: 404 });
+        }
+
+        if (String(quest.creator) !== String(userId)) {
+            return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+        }
+
+        const acceptedByList = Array.isArray(quest.acceptedBy)
+            ? quest.acceptedBy
+            : quest.acceptedBy ? [quest.acceptedBy] : [];
+        if (quest.status !== "OPEN" || acceptedByList.length > 0) {
+            return NextResponse.json({ success: false, error: "Quest can no longer be edited" }, { status: 409 });
+        }
+
+        const cash = Number(body.cash) || 0;
+        const loot = body.loot ? body.loot.trim() : "";
+        const title = body.title ? body.title.trim() : "";
+        const description = body.description ? body.description.trim() : "";
+        const location = body.location ? body.location.trim() : "";
+        const phone = body.phone ? body.phone.trim() : "";
+        const slots = Number(body.slots) || 1;
+
+        if (!title || !description || !location || !phone) {
+            return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+        }
+
+        const contact = `${location} • ${phone}`;
+        if (isProfane(title) || isProfane(description) || isProfane(loot) || isProfane(contact) || isProfane(location)) {
+            return NextResponse.json(
+                { success: false, error: "Please keep it professional. Profanity is not allowed." },
+                { status: 400 }
+            );
+        }
+
+        let displayString = "";
+        if (cash > 0) displayString += `₹${cash}`;
+        if (cash > 0 && loot) displayString += " + ";
+        if (loot) displayString += loot;
+
+        quest.title = title;
+        quest.description = description;
+        quest.contact = contact;
+        quest.reward = displayString;
+        quest.cashValue = cash;
+        quest.lootItems = loot ? [loot] : [];
+        quest.slots = slots;
+        quest.slotsRemaining = slots;
+
+        await quest.save();
+
+        return NextResponse.json({ success: true, data: quest }, { status: 200 });
+    } catch (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
 }

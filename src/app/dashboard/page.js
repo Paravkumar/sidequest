@@ -13,10 +13,30 @@ import Pusher from "pusher-js";
 export default function Dashboard() {
   const { data: session, status } = useSession(); 
   const router = useRouter();
+  const isAdmin = Boolean(
+    session?.user?.email &&
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL &&
+    session.user.email.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_EMAIL.toLowerCase()
+  );
 
   const [activeTab, setActiveTab] = useState("feed");
   const [activeCommunity, setActiveCommunity] = useState("Loading..."); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteQuestId, setDeleteQuestId] = useState(null);
+  const [isCompleteOpen, setIsCompleteOpen] = useState(false);
+  const [completeQuestId, setCompleteQuestId] = useState(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editQuestId, setEditQuestId] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    location: "",
+    phone: "",
+    cash: "",
+    loot: "",
+    slots: 1,
+    description: ""
+  });
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [activeChatQuest, setActiveChatQuest] = useState(null);
   const [unreadByQuest, setUnreadByQuest] = useState({});
@@ -26,6 +46,9 @@ export default function Dashboard() {
   
   const [feedQuests, setFeedQuests] = useState([]); 
   const [myStats, setMyStats] = useState({ posted: [], accepted: [], earnings: 0, loot: [] });
+  const onboardingComplete = Boolean(session?.user?.community)
+    && (myStats.posted?.length || 0) > 0
+    && (myStats.accepted?.length || 0) > 0;
   
   const [isLoading, setIsLoading] = useState(false); 
   const [isAccepting, setIsAccepting] = useState(null); 
@@ -138,9 +161,10 @@ export default function Dashboard() {
   const unreadTotal = useMemo(() => Object.values(unreadByQuest).reduce((a, b) => a + b, 0), [unreadByQuest]);
 
   const formatChatTimestamp = (quest) => {
-    if (!quest?.updatedAt) return "";
-    const date = new Date(quest.updatedAt);
-    if (Number.isNaN(date.getTime())) return "";
+    const raw = quest?.updatedAt || quest?.createdAt;
+    if (!raw) return "Just now";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "Just now";
     const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const day = date.toLocaleDateString([], { year: "numeric", month: "short", day: "2-digit" });
     return `${day} • ${time}`;
@@ -151,9 +175,10 @@ export default function Dashboard() {
     const isCreator = String(quest.creator?._id || quest.creator) === String(session.user.id);
     if (isCreator) {
       const acceptedUsers = quest.acceptedByUsers || [];
-      if (acceptedUsers.length === 1) return acceptedUsers[0]?.name || "Quest Taker";
+      const singleName = acceptedUsers[0]?.name || quest.acceptedByUser?.name;
+      if (acceptedUsers.length === 1 && singleName) return singleName;
       if (acceptedUsers.length > 1) return "Quest Takers";
-      return "Quest Taker";
+      return singleName || "Quest Taker";
     }
     return quest.creator?.name || "Quest Creator";
   };
@@ -206,6 +231,11 @@ export default function Dashboard() {
     if (activeTab === "chat" && activeChatQuest?._id) {
       const questId = String(activeChatQuest._id);
       setUnreadByQuest(prev => ({ ...prev, [questId]: 0 }));
+      fetch("/api/chat/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questId }),
+      }).catch(() => {});
     }
   }, [activeTab, activeChatQuest]);
 
@@ -214,6 +244,11 @@ export default function Dashboard() {
     setActiveChatQuest(quest);
     setActiveTab("chat");
     setUnreadByQuest(prev => ({ ...prev, [String(quest._id)]: 0 }));
+    fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questId: String(quest._id) }),
+    }).catch(() => {});
   }
 
   async function fetchFeed() {
@@ -237,6 +272,23 @@ export default function Dashboard() {
       if (json.success) setMyStats(json.data);
     } catch (err) { console.error(err); }
   }
+
+  async function fetchUnreadStatus() {
+    try {
+      const res = await fetch("/api/chat/unread");
+      const json = await res.json();
+      if (json.success && json.data) {
+        setUnreadByQuest(json.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetchUnreadStatus();
+  }, [session?.user?.id, chatQuests.length]);
 
   function triggerSuccessConfetti() {
     const end = Date.now() + 1000; 
@@ -270,19 +322,89 @@ export default function Dashboard() {
     setIsAccepting(null);
   }
 
+  async function handleDeleteQuest(questId) {
+    if (!isAdmin) return;
+    setDeleteQuestId(questId);
+    setIsDeleteOpen(true);
+    return;
+  }
+
+  function openEditQuest(quest) {
+    setEditQuestId(quest._id);
+    setEditFormData({
+      title: quest.title || "",
+      location: quest.location || "",
+      phone: (quest.phone || "").replace("+91 ", "").replace(/^\+?91\s?/, ""),
+      cash: quest.cashValue || "",
+      loot: (quest.lootItems && quest.lootItems[0]) || "",
+      slots: quest.slots || 1,
+      description: quest.description || ""
+    });
+    setIsEditOpen(true);
+  }
+
+  async function confirmEditQuest() {
+    if (!editQuestId || !session?.user?.id) return;
+    try {
+      const res = await fetch('/api/quests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questId: editQuestId,
+          userId: session.user.id,
+          title: editFormData.title,
+          description: editFormData.description,
+          location: editFormData.location,
+          phone: `+91 ${String(editFormData.phone).replace(/\D/g, '').slice(0, 10)}`,
+          cash: editFormData.cash,
+          loot: editFormData.loot,
+          slots: editFormData.slots,
+        }),
+      });
+      if (res.ok) fetchFeed();
+    } catch (error) {
+      console.error("Edit failed", error);
+    } finally {
+      setIsEditOpen(false);
+      setEditQuestId(null);
+    }
+  }
+
+  async function confirmDeleteQuest() {
+    if (!deleteQuestId) return;
+    try {
+      const res = await fetch(`/api/quests?questId=${deleteQuestId}`, { method: "DELETE" });
+      if (res.ok) fetchFeed();
+    } catch (error) {
+      console.error("Delete failed", error);
+    } finally {
+      setIsDeleteOpen(false);
+      setDeleteQuestId(null);
+    }
+  }
+
   async function handleComplete(questId) {
-    if(!confirm("Mark done & pay reward?")) return;
+    setCompleteQuestId(questId);
+    setIsCompleteOpen(true);
+  }
+
+  async function confirmCompleteQuest() {
+    if (!completeQuestId) return;
     try {
       const res = await fetch('/api/complete-quest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questId, userId: session.user.id }),
+        body: JSON.stringify({ questId: completeQuestId, userId: session.user.id }),
       });
       if (res.ok) {
         triggerSuccessConfetti();
         activeTab === "profile" ? fetchMyStats() : fetchFeed();
       }
     } catch (error) { console.error("Network Error"); }
+    finally {
+      setIsCompleteOpen(false);
+      setCompleteQuestId(null);
+    }
   }
 
   async function handlePostQuest() {
@@ -356,8 +478,8 @@ export default function Dashboard() {
       <aside className="hidden w-20 flex-col items-center border-r border-white/5 bg-slate-900 py-6 md:flex justify-between">
         <div>
             {/* --- UPDATED SIDEBAR LOGO --- */}
-            <div className="mb-8 relative h-9 w-9 rounded-lg overflow-hidden">
-              <Image src={logo} alt="SideQuest Logo" fill className="object-contain" />
+            <div className="mb-8 h-10 w-10 rounded-lg overflow-hidden flex items-center justify-center">
+              <Image src={logo} alt="SideQuest Logo" width={32} height={32} className="object-contain" />
             </div>
             {/* ---------------------------- */}
             
@@ -406,18 +528,20 @@ export default function Dashboard() {
                     <button onClick={() => { setActiveTab("profile"); setIsProfileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition">
                         <UserCircle className="h-4 w-4" /> My Profile
                     </button>
-                    <button
-                      onClick={() => {
-                        setHideOnboarding(false);
-                        if (typeof window !== "undefined") {
-                          window.localStorage.removeItem("hideOnboarding");
-                        }
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition"
-                    >
-                      <CheckCircle className="h-4 w-4" /> Show onboarding
-                    </button>
+                    {!onboardingComplete && (
+                      <button
+                        onClick={() => {
+                          setHideOnboarding(false);
+                          if (typeof window !== "undefined") {
+                            window.localStorage.removeItem("hideOnboarding");
+                          }
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition"
+                      >
+                        <CheckCircle className="h-4 w-4" /> Show onboarding
+                      </button>
+                    )}
                     <button onClick={() => signOut({ callbackUrl: "/login" })} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-red-500/10 text-red-400 transition border-t border-white/5">
                         <LogOut className="h-4 w-4" /> Logout
                     </button>
@@ -491,7 +615,7 @@ export default function Dashboard() {
             )}
             {feedQuests.map((quest) => (
               <div key={quest._id}>
-                <QuestCard quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} onOpenChat={openChat} />
+                <QuestCard quest={quest} currentUserId={session?.user?.id} onAccept={handleAccept} onComplete={handleComplete} isAccepting={isAccepting} onOpenChat={openChat} onDelete={handleDeleteQuest} onEdit={openEditQuest} isAdmin={isAdmin} />
               </div>
             ))}
             {feedQuests.length === 0 && <div className="text-center text-slate-500 mt-10">No quests yet in {activeCommunity}.<br/>Be the first to post!</div>}
@@ -544,7 +668,14 @@ export default function Dashboard() {
               <div className="space-y-4 dashboard-feed-bg rounded-2xl p-4 border border-white/5">
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Your Chats</h3>
                 <div className="space-y-2">
-                  {chatQuests.map((quest) => (
+                  {chatQuests
+                    .slice()
+                    .sort((a, b) => {
+                      const aCompleted = a.status === "COMPLETED" ? 1 : 0;
+                      const bCompleted = b.status === "COMPLETED" ? 1 : 0;
+                      return aCompleted - bCompleted;
+                    })
+                    .map((quest) => (
                     <button
                       key={quest._id}
                       onClick={() => openChat(quest)}
@@ -583,6 +714,7 @@ export default function Dashboard() {
                     isGroup={Number(activeChatQuest.slots) > 1}
                     participantCount={getParticipantCount(activeChatQuest)}
                     creatorId={activeChatQuest.creator?._id || activeChatQuest.creator}
+                    isClosed={activeChatQuest.status === "COMPLETED"}
                   />
                 ) : (
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-slate-900/50 flex items-center justify-center text-slate-500">
@@ -612,10 +744,13 @@ export default function Dashboard() {
             <div className="absolute inset-0 flex items-center justify-between px-6">
               <button
                 onClick={() => setActiveTab("chat")}
-                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "chat" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
+                className={`relative overflow-visible h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "chat" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
                 aria-label="Chat"
               >
                 <MessageSquare className="h-5 w-5" />
+                {unreadTotal > 0 && (
+                  <span className="absolute -top-1 -right-1 z-20 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_12px_rgba(239,68,68,0.9)]" />
+                )}
               </button>
 
               <button
@@ -707,12 +842,84 @@ export default function Dashboard() {
           </div>
         )}
 
+        {isDeleteOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">Delete quest?</h3>
+                <button onClick={() => { setIsDeleteOpen(false); setDeleteQuestId(null); }} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              <p className="text-sm text-slate-400 mb-5">This will permanently delete the quest and its chat. This action can’t be undone.</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setIsDeleteOpen(false); setDeleteQuestId(null); }} className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold transition">Cancel</button>
+                <button onClick={confirmDeleteQuest} className="flex-1 py-3 rounded-xl bg-red-600/90 hover:bg-red-600 text-white font-bold transition">Delete</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isCompleteOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">Mark quest as completed?</h3>
+                <button onClick={() => { setIsCompleteOpen(false); setCompleteQuestId(null); }} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              <p className="text-sm text-slate-400 mb-5">This will close the quest and confirm the reward. Make sure the task is finished.</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setIsCompleteOpen(false); setCompleteQuestId(null); }} className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold transition">Cancel</button>
+                <button onClick={confirmCompleteQuest} className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition">Confirm</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isEditOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white">Edit Quest</h3>
+                <button onClick={() => { setIsEditOpen(false); setEditQuestId(null); }}><X className="h-6 w-6 text-slate-400" /></button>
+              </div>
+
+              <div className="space-y-4">
+                <div><label className="text-xs font-medium text-slate-400 uppercase">Quest Title *</label><input value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} type="text" className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-amber-400 uppercase">Location *</label>
+                    <input value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} type="text" className="mt-1 w-full rounded-lg bg-slate-800 border border-amber-500/30 p-3 text-white outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-amber-400 uppercase">Phone (+91) *</label>
+                    <input value={editFormData.phone} onChange={(e) => setEditFormData({...editFormData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} type="text" className="mt-1 w-full rounded-lg bg-slate-800 border border-amber-500/30 p-3 text-white outline-none focus:border-amber-500" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-emerald-400 uppercase">Money (₹)</label>
+                    <input value={editFormData.cash} onChange={(e) => setEditFormData({...editFormData, cash: e.target.value})} type="number" min="0" step="1" className="mt-1 w-full rounded-lg bg-slate-800 border border-emerald-500/30 p-3 text-white outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-fuchsia-400 uppercase">Loot / Items</label>
+                    <input value={editFormData.loot} onChange={(e) => setEditFormData({...editFormData, loot: e.target.value})} type="text" className="mt-1 w-full rounded-lg bg-slate-800 border border-fuchsia-500/30 p-3 text-white outline-none focus:border-fuchsia-500" />
+                  </div>
+                </div>
+                <div><label className="text-xs font-medium text-slate-400 uppercase">Slots</label><input value={editFormData.slots} onChange={(e) => setEditFormData({...editFormData, slots: e.target.value})} type="number" min="1" className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none" /></div>
+                <div><label className="text-xs font-medium text-slate-400 uppercase">Details *</label><textarea value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} rows="3" className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none"></textarea></div>
+              </div>
+
+              <button onClick={confirmEditQuest} className="mt-6 w-full flex justify-center items-center rounded-xl bg-violet-600 py-3.5 font-bold text-white hover:bg-violet-500">Save Changes</button>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
 }
 
-function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, onOpenChat }) {
+function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, onOpenChat, onDelete, onEdit, isAdmin = false }) {
   const isCreator = String(quest.creator?._id || quest.creator) === String(currentUserId);
   const acceptedByList = Array.isArray(quest.acceptedBy)
     ? quest.acceptedBy.map((id) => String(id))
@@ -760,7 +967,7 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
             <div className="flex-1 w-full max-w-md">
                 <div className="flex items-baseline gap-2"><span className="font-bold text-slate-200">{creatorName}</span><span className="text-xs text-slate-500">{postedLabel}</span></div>
                 
-                <div className="mt-2 w-full rounded-2xl border border-violet-500/30 bg-slate-900/80 p-5 backdrop-blur-md shadow-2xl shadow-violet-900/10 overflow-hidden">
+                <div className={`mt-2 w-full rounded-2xl border bg-slate-900/80 p-5 backdrop-blur-md shadow-2xl overflow-hidden ${isCreator ? "border-yellow-400/60 shadow-[0_0_18px_rgba(250,204,21,0.35)]" : "border-violet-500/30 shadow-violet-900/10"}`}>
                     <div className="mb-3 flex justify-between items-center gap-3">
                         <span className={`rounded-full border px-3 py-1 text-xs font-bold ${quest.status === "OPEN" ? "bg-violet-500/20 border-violet-500/30 text-violet-300" : quest.status === "COMPLETED" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-amber-500/20 border-amber-500/30 text-amber-300"}`}>{quest.status === "OPEN" ? "QUEST" : quest.status === "COMPLETED" ? "COMPLETED" : "IN PROGRESS"}</span>
                         <span className={`rounded-full border px-3 py-1 text-[10px] font-bold ${slotsRemaining > 0 ? "bg-slate-800 text-slate-300 border-white/10" : "bg-slate-900 text-slate-500 border-white/10"}`}>
@@ -819,6 +1026,12 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
                             )}
                             
                             {isCreator && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 border border-white/10"><User className="h-3 w-3" /> Your Quest</span>}
+
+                            {isCreator && acceptedByList.length === 0 && quest.status === "OPEN" && (
+                              <button onClick={() => onEdit(quest)} className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 border border-white/10 hover:bg-slate-700">
+                                Edit
+                              </button>
+                            )}
                             
                             {quest.status === "IN_PROGRESS" && isCreator && <button onClick={() => onComplete(quest._id)} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500">Mark Done <CheckCircle className="h-3 w-3" /></button>}
                             {quest.status === "IN_PROGRESS" && !isCreator && isAcceptedByMe && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-400 border border-white/10">Joined ⏳</span>}
@@ -827,9 +1040,15 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
                             )}
                             {quest.status === "COMPLETED" && <span className="flex items-center gap-2 rounded-lg bg-emerald-900/30 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">Completed 🎉</span>}
 
-                            {(quest.status === "IN_PROGRESS" || quest.status === "COMPLETED") && (isCreator || isAcceptedByMe) && (
+                            {quest.status === "IN_PROGRESS" && (isCreator || isAcceptedByMe) && (
                               <button onClick={() => onOpenChat(quest)} className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200 border border-white/10 hover:bg-slate-700">
                                 <MessageSquare className="h-3 w-3" /> Message
+                              </button>
+                            )}
+
+                            {isAdmin && quest.status === "COMPLETED" && (
+                              <button onClick={() => onDelete(quest._id)} className="flex items-center gap-2 rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-bold text-red-300 border border-red-500/30 hover:bg-red-500/20">
+                                Delete
                               </button>
                             )}
                         </div>
@@ -854,12 +1073,10 @@ function MiniQuestCard({ quest }) {
 
 function SidebarIcon({ icon, active, badge = 0 }) {
   return (
-    <div className={`relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600 shadow-[0_0_18px_rgba(139,92,246,0.45)]" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white hover:shadow-[0_0_18px_rgba(139,92,246,0.35)]"}`}>
+    <div className={`relative overflow-visible flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl transition-all ${active ? "bg-slate-800 text-white ring-2 ring-violet-600 shadow-[0_0_18px_rgba(139,92,246,0.45)]" : "bg-transparent text-slate-500 hover:bg-slate-800 hover:text-white hover:shadow-[0_0_18px_rgba(139,92,246,0.35)]"}`}>
       {icon}
       {badge > 0 && (
-        <span className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge}
-        </span>
+        <span className="absolute -top-1 -right-1 z-20 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_12px_rgba(239,68,68,0.9)]" />
       )}
     </div>
   );

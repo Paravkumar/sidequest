@@ -70,7 +70,7 @@ export default function LandingPage() {
           </motion.h1>
           
           <motion.p variants={item} className="text-lg text-slate-400 max-w-xl leading-relaxed">
-            Stop being broke. SideQuest connects you with peers who need help. 
+            SideQuest connects you with peers who need help. 
             Complete simple tasks, run errands, and solve problems to earn instant cash.
             <br/>Your campus. Your economy.
           </motion.p>
@@ -180,8 +180,8 @@ export default function LandingPage() {
             <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 mb-4">
               <Shield className="h-5 w-5" />
             </div>
-            <h3 className="text-lg font-bold text-white">Verified-Only Campus</h3>
-            <p className="text-sm text-slate-400 mt-2">Your college email unlocks a trusted, student-only marketplace.</p>
+            <h3 className="text-lg font-bold text-white">Verified Only</h3>
+            <p className="text-sm text-slate-400 mt-2">Your verified email unlocks a trusted, student-only marketplace.</p>
           </motion.div>
           <motion.div whileHover={{ y: -4 }} className="rounded-2xl border border-white/10 bg-slate-900/60 p-6">
             <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">

@@ -26,8 +26,11 @@ export async function GET(req, { params }) {
     }
 
     const userId = normalizeId(session.user.id);
+    const acceptedByList = Array.isArray(quest.acceptedBy)
+      ? quest.acceptedBy.map((id) => normalizeId(id))
+      : quest.acceptedBy ? [normalizeId(quest.acceptedBy)] : [];
     const isCreator = normalizeId(quest.creator) === userId;
-    const isAcceptor = normalizeId(quest.acceptedBy) === userId;
+    const isAcceptor = acceptedByList.includes(userId);
     if (!isCreator && !isAcceptor) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

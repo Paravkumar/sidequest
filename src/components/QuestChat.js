@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import Pusher from "pusher-js";
 import { Send } from "lucide-react";
 
-export default function QuestChat({ questId, currentUserId, chatTitle }) {
+export default function QuestChat({ questId, currentUserId, chatTitle, isGroup = false, participantCount = 0, creatorId = "" }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef(null);
@@ -69,19 +69,30 @@ export default function QuestChat({ questId, currentUserId, chatTitle }) {
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-      <div className="p-4 bg-slate-900/80 border-b border-white/10 text-white font-bold">
-        {chatTitle}
+      <div className="p-4 bg-slate-900/80 border-b border-white/10 text-white">
+        <div className="font-bold">{chatTitle}</div>
+        {isGroup && (
+          <div className="text-xs text-slate-400 mt-1">
+            Group quest chat{participantCount ? ` • ${participantCount} members` : ""}
+          </div>
+        )}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950">
         {messages.map((msg) => {
           const isMine = String(msg.sender?._id || msg.sender) === String(currentUserId);
+          const isCreatorMessage = isGroup && String(msg.sender?._id || msg.sender) === String(creatorId);
           const senderName = msg.sender?.name || msg.senderName || "Student";
           const timeLabel = formatTime(msg.createdAt);
           return (
             <div key={msg._id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${isMine ? "bg-violet-600 text-white rounded-tr-none" : "bg-slate-800 text-slate-200 border border-white/10 rounded-tl-none"}`}>
-                {!isMine && <div className="text-[10px] text-slate-400 mb-1">{senderName}</div>}
+              <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${isMine ? "bg-violet-600 text-white rounded-tr-none" : "bg-slate-800 text-slate-200 border border-white/10 rounded-tl-none"} ${isCreatorMessage && !isMine ? "ring-2 ring-amber-400/70 shadow-[0_0_18px_rgba(251,191,36,0.35)]" : ""}`}>
+                {!isMine && (
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 mb-1">
+                    <span>{senderName}</span>
+                    {isCreatorMessage && <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[9px] font-bold uppercase">Creator</span>}
+                  </div>
+                )}
                 {msg.text}
                 {timeLabel && <div className="text-[10px] text-slate-300/70 mt-1 text-right">{timeLabel}</div>}
               </div>

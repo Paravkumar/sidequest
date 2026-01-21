@@ -11,6 +11,7 @@ const QuestSchema = new mongoose.Schema(
     cashValue: { type: Number, default: 0 },
     lootItems: { type: [String], default: [] },
     slots: { type: Number, default: 1 },
+    slotsRemaining: { type: Number, default: 1 },
     status: { type: String, default: "OPEN" },
     
     // --- THE FIX IS HERE ---
@@ -18,7 +19,7 @@ const QuestSchema = new mongoose.Schema(
     creator: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     // -----------------------
     
-    acceptedBy: { type: String },
+    acceptedBy: { type: [mongoose.Schema.Types.ObjectId], ref: "User", default: [] },
     community: { type: String, default: "IIT Delhi" },
   },
   { timestamps: true }

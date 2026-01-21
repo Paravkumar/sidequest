@@ -55,30 +55,43 @@ export default function Dashboard() {
     setHideOnboarding(hidden === "true");
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if (status !== "authenticated") return;
-    if (session?.user?.id) {
-      if (session.user.community) {
-        setActiveCommunity(session.user.community);
-      } else {
-        router.push("/select-college");
-      }
-        
-      if (session.user.phone) {
-        const rawPhone = session.user.phone.replace("+91 ", "");
-        setFormData(prev => ({ ...prev, phone: rawPhone }));
-      }
+    if (!session?.user) return;
 
-      if(activeTab === "profile" || activeTab === "chat") fetchMyStats();
+    if (session.user.community) {
+      setActiveCommunity(session.user.community);
+    } else {
+      router.push("/select-college");
     }
-    }, [session, activeTab, status, router]);
+    
+    if (session.user.phone) {
+      const rawPhone = session.user.phone.replace("+91 ", "");
+      setFormData(prev => ({ ...prev, phone: rawPhone }));
+    }
 
-    useEffect(() => {
-      if (status !== "authenticated") return;
-      if(session?.user?.id && activeCommunity !== "Loading...") {
-        fetchFeed();
-      }
-    }, [activeCommunity, session, status]);
+    if(activeTab === "profile" || activeTab === "chat" || activeTab === "feed") fetchMyStats();
+  }, [session, activeTab, status, router]);
+
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hasCommunity = Boolean(session?.user?.community);
+    const hasPosted = (myStats.posted?.length || 0) > 0;
+    const hasAccepted = (myStats.accepted?.length || 0) > 0;
+    const completed = hasCommunity && hasPosted && hasAccepted;
+    if (completed) {
+      setHideOnboarding(true);
+      window.localStorage.setItem("hideOnboarding", "true");
+    }
+  }, [session?.user?.community, myStats.posted, myStats.accepted]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if(session?.user?.id && activeCommunity !== "Loading...") {
+      fetchFeed();
+    }
+  }, [activeCommunity, session, status]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -136,8 +149,22 @@ export default function Dashboard() {
   const getOtherChatName = (quest) => {
     if (!quest || !session?.user?.id) return "Chat";
     const isCreator = String(quest.creator?._id || quest.creator) === String(session.user.id);
-    if (isCreator) return quest.acceptedByUser?.name || "Quest Taker";
+    if (isCreator) {
+      const acceptedUsers = quest.acceptedByUsers || [];
+      if (acceptedUsers.length === 1) return acceptedUsers[0]?.name || "Quest Taker";
+      if (acceptedUsers.length > 1) return "Quest Takers";
+      return "Quest Taker";
+    }
     return quest.creator?.name || "Quest Creator";
+  };
+
+  const getParticipantCount = (quest) => {
+    if (!quest) return 0;
+    const acceptedByList = Array.isArray(quest.acceptedBy)
+      ? quest.acceptedBy
+      : quest.acceptedBy ? [quest.acceptedBy] : [];
+    const creatorCount = quest.creator ? 1 : 0;
+    return acceptedByList.length + creatorCount;
   };
 
   useEffect(() => {
@@ -342,7 +369,7 @@ export default function Dashboard() {
           </aside>
 
       <main className="flex flex-1 flex-col relative pb-24 md:pb-0">
-        <header className="flex h-16 items-center justify-between border-b border-white/5 bg-slate-900/50 px-6 backdrop-blur-md">
+        <header className="relative z-[9999] flex h-16 items-center justify-between border-b border-white/5 bg-slate-900/50 px-6 backdrop-blur-md">
           <div className="flex items-center gap-4 relative">
             {activeTab === "feed" ? (
                 <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -374,10 +401,22 @@ export default function Dashboard() {
 
              {isProfileMenuOpen && (
                 <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsProfileMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20">
+                <div className="fixed inset-0 z-[9998]" onClick={() => setIsProfileMenuOpen(false)}></div>
+                <div className="fixed right-6 top-16 mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[9999]">
                     <button onClick={() => { setActiveTab("profile"); setIsProfileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition">
                         <UserCircle className="h-4 w-4" /> My Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setHideOnboarding(false);
+                        if (typeof window !== "undefined") {
+                          window.localStorage.removeItem("hideOnboarding");
+                        }
+                        setIsProfileMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-white/5 text-slate-300 hover:text-white transition"
+                    >
+                      <CheckCircle className="h-4 w-4" /> Show onboarding
                     </button>
                     <button onClick={() => signOut({ callbackUrl: "/login" })} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 hover:bg-red-500/10 text-red-400 transition border-t border-white/5">
                         <LogOut className="h-4 w-4" /> Logout
@@ -389,9 +428,9 @@ export default function Dashboard() {
             </header>
 
         {activeTab === "feed" && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 dashboard-feed-bg">
+          <div className="relative z-0 flex-1 overflow-y-auto p-6 space-y-6 dashboard-feed-bg">
             {!hideOnboarding && (
-              <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 backdrop-blur-md">
+              <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 backdrop-blur-md relative z-0">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-bold text-white">Get started in 3 quick steps</h3>
@@ -519,6 +558,9 @@ export default function Dashboard() {
                           </span>
                         )}
                       </div>
+                      {Number(quest.slots) > 1 && (
+                        <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-violet-400">Group Quest</div>
+                      )}
                       <div className="text-xs text-slate-500 mt-1 flex items-center justify-between gap-2">
                         <span>{quest.status === "IN_PROGRESS" ? "Active" : quest.status}</span>
                         {quest.status === "IN_PROGRESS" && <span>Accepted: {formatChatTimestamp(quest)}</span>}
@@ -538,6 +580,9 @@ export default function Dashboard() {
                     questId={activeChatQuest._id}
                     currentUserId={session?.user?.id}
                     chatTitle={getOtherChatName(activeChatQuest)}
+                    isGroup={Number(activeChatQuest.slots) > 1}
+                    participantCount={getParticipantCount(activeChatQuest)}
+                    creatorId={activeChatQuest.creator?._id || activeChatQuest.creator}
                   />
                 ) : (
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-slate-900/50 flex items-center justify-center text-slate-500">
@@ -566,19 +611,19 @@ export default function Dashboard() {
           <div className="relative h-16 rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-md shadow-2xl">
             <div className="absolute inset-0 flex items-center justify-between px-6">
               <button
-                onClick={() => setActiveTab("feed")}
-                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "feed" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
-                aria-label="Feed"
-              >
-                <Home className="h-5 w-5" />
-              </button>
-
-              <button
                 onClick={() => setActiveTab("chat")}
                 className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "chat" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
                 aria-label="Chat"
               >
                 <MessageSquare className="h-5 w-5" />
+              </button>
+
+              <button
+                onClick={() => setActiveTab("feed")}
+                className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${activeTab === "feed" ? "text-white bg-slate-800 shadow-[0_0_18px_rgba(139,92,246,0.35)]" : "text-slate-500"}`}
+                aria-label="Feed"
+              >
+                <Home className="h-5 w-5" />
               </button>
 
               <button
@@ -668,8 +713,15 @@ export default function Dashboard() {
 }
 
 function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, onOpenChat }) {
-    const isCreator = String(quest.creator?._id || quest.creator) === String(currentUserId);
-    const isAcceptedByMe = String(quest.acceptedBy) === String(currentUserId);
+  const isCreator = String(quest.creator?._id || quest.creator) === String(currentUserId);
+  const acceptedByList = Array.isArray(quest.acceptedBy)
+    ? quest.acceptedBy.map((id) => String(id))
+    : quest.acceptedBy ? [String(quest.acceptedBy)] : [];
+  const isAcceptedByMe = acceptedByList.includes(String(currentUserId));
+  const totalSlots = Number(quest.slots) || 1;
+  const slotsRemaining = quest.slotsRemaining != null
+    ? Number(quest.slotsRemaining)
+    : Math.max(totalSlots - acceptedByList.length, 0);
     
     // Privacy Logic:
     const finalLocation = quest.location || "";
@@ -709,8 +761,11 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
                 <div className="flex items-baseline gap-2"><span className="font-bold text-slate-200">{creatorName}</span><span className="text-xs text-slate-500">{postedLabel}</span></div>
                 
                 <div className="mt-2 w-full rounded-2xl border border-violet-500/30 bg-slate-900/80 p-5 backdrop-blur-md shadow-2xl shadow-violet-900/10 overflow-hidden">
-                    <div className="mb-3 flex justify-between items-center">
+                    <div className="mb-3 flex justify-between items-center gap-3">
                         <span className={`rounded-full border px-3 py-1 text-xs font-bold ${quest.status === "OPEN" ? "bg-violet-500/20 border-violet-500/30 text-violet-300" : quest.status === "COMPLETED" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-amber-500/20 border-amber-500/30 text-amber-300"}`}>{quest.status === "OPEN" ? "QUEST" : quest.status === "COMPLETED" ? "COMPLETED" : "IN PROGRESS"}</span>
+                        <span className={`rounded-full border px-3 py-1 text-[10px] font-bold ${slotsRemaining > 0 ? "bg-slate-800 text-slate-300 border-white/10" : "bg-slate-900 text-slate-500 border-white/10"}`}>
+                          {slotsRemaining > 0 ? `${slotsRemaining} slots left` : "Full"}
+                        </span>
                     </div>
                     
                     <h3 className="text-lg font-bold text-white mb-1 break-words">{quest.title}</h3>
@@ -759,12 +814,17 @@ function QuestCard({ quest, currentUserId, onAccept, onComplete, isAccepting, on
                         </div>
 
                         <div className="flex items-center justify-between flex-wrap gap-2 mt-2">
-                            {quest.status === "OPEN" && !isCreator && <button onClick={() => onAccept(quest._id)} disabled={isAccepting === quest._id} className="flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50">{isAccepting === quest._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Accept <ArrowRight className="h-3 w-3" /></>}</button>}
+                            {slotsRemaining > 0 && !isCreator && !isAcceptedByMe && quest.status !== "COMPLETED" && (
+                              <button onClick={() => onAccept(quest._id)} disabled={isAccepting === quest._id} className="flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50">{isAccepting === quest._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Join <ArrowRight className="h-3 w-3" /></>}</button>
+                            )}
                             
-                            {quest.status === "OPEN" && isCreator && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 border border-white/10"><User className="h-3 w-3" /> Your Quest</span>}
+                            {isCreator && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 border border-white/10"><User className="h-3 w-3" /> Your Quest</span>}
                             
                             {quest.status === "IN_PROGRESS" && isCreator && <button onClick={() => onComplete(quest._id)} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500">Mark Done <CheckCircle className="h-3 w-3" /></button>}
-                            {quest.status === "IN_PROGRESS" && !isCreator && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-400 border border-white/10">Taken ⏳</span>}
+                            {quest.status === "IN_PROGRESS" && !isCreator && isAcceptedByMe && <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-400 border border-white/10">Joined ⏳</span>}
+                            {slotsRemaining === 0 && !isCreator && !isAcceptedByMe && quest.status !== "COMPLETED" && (
+                              <span className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 border border-white/10">Full</span>
+                            )}
                             {quest.status === "COMPLETED" && <span className="flex items-center gap-2 rounded-lg bg-emerald-900/30 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">Completed 🎉</span>}
 
                             {(quest.status === "IN_PROGRESS" || quest.status === "COMPLETED") && (isCreator || isAcceptedByMe) && (

@@ -20,9 +20,25 @@ export async function POST(request) {
             return NextResponse.json({ message: "Quest not found" }, { status: 404 });
         }
 
-        // 2. Check if it's already taken
-        if (quest.status !== "OPEN") {
-            return NextResponse.json({ message: "Quest is already taken!" }, { status: 409 });
+        if (quest.status === "COMPLETED") {
+            return NextResponse.json({ message: "Quest is already completed." }, { status: 409 });
+        }
+
+        const acceptedByList = Array.isArray(quest.acceptedBy)
+            ? quest.acceptedBy.map((id) => String(id))
+            : quest.acceptedBy ? [String(quest.acceptedBy)] : [];
+
+        if (acceptedByList.includes(String(userId))) {
+            return NextResponse.json({ message: "You already joined this quest." }, { status: 409 });
+        }
+
+        if (quest.slotsRemaining == null) {
+            const totalSlots = Number(quest.slots) || 1;
+            quest.slotsRemaining = Math.max(totalSlots - acceptedByList.length, 0);
+        }
+
+        if (quest.slotsRemaining <= 0) {
+            return NextResponse.json({ message: "No slots left for this quest." }, { status: 409 });
         }
 
         // 3. SECURITY DISABLED FOR TESTING (GOD MODE)
@@ -34,7 +50,8 @@ export async function POST(request) {
 
         // 4. Update the Quest
         quest.status = "IN_PROGRESS";
-        quest.acceptedBy = userId;
+        quest.acceptedBy = [...acceptedByList, userId];
+        quest.slotsRemaining = Math.max((quest.slotsRemaining || 1) - 1, 0);
         await quest.save();
 
         return NextResponse.json({ message: "Quest Accepted!", quest }, { status: 200 });

@@ -152,6 +152,7 @@ function LoginContent() {
   }
 
   return (
+    <>
     <div className="w-full max-w-md bg-slate-900 border border-white/10 p-8 rounded-2xl shadow-2xl">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 h-12 w-12 rounded-xl overflow-hidden">
@@ -187,30 +188,6 @@ function LoginContent() {
                       placeholder="+91 9876543210"
                     />
                 </div>
-                {otpSent && (
-                  <div>
-                    <label className="text-xs font-medium text-slate-400 uppercase">Email OTP</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                      className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none focus:border-violet-500 transition"
-                      placeholder="Enter 6-digit code"
-                    />
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <button
-                        type="button"
-                        onClick={handleResendOtp}
-                        disabled={isSendingOtp}
-                        className="text-violet-400 hover:text-violet-300 font-semibold disabled:opacity-60"
-                      >
-                        {isSendingOtp ? "Sending..." : "Resend code"}
-                      </button>
-                    </div>
-                  </div>
-                )}
             </>
           )}
           
@@ -224,23 +201,12 @@ function LoginContent() {
             <input type="password" required value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none focus:border-violet-500 transition" placeholder="••••••••" />
           </div>
 
-          {isRegistering && otpSent ? (
-            <button
-              type="button"
-              onClick={handleVerifyOtp}
-              disabled={isVerifyingOtp}
-              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition disabled:opacity-50 flex justify-center"
-            >
-              {isVerifyingOtp ? <Loader2 className="animate-spin" /> : "Verify Email"}
-            </button>
-          ) : (
-            <button
-              disabled={isLoading}
-              className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition disabled:opacity-50 flex justify-center"
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : (isRegistering ? "Sign Up" : "Login")}
-            </button>
-          )}
+          <button
+            disabled={isLoading}
+            className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold transition disabled:opacity-50 flex justify-center"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : (isRegistering ? "Sign Up" : "Login")}
+          </button>
         </form>
 
         <p className="mt-8 text-center text-sm text-slate-400">
@@ -249,6 +215,58 @@ function LoginContent() {
             {isRegistering ? "Login" : "Sign Up"}
           </button>
         </p>
+    </div>
+    <OtpModal
+      open={isRegistering && otpSent}
+      otp={otp}
+      setOtp={setOtp}
+      onClose={() => setOtpSent(false)}
+      onVerify={handleVerifyOtp}
+      onResend={handleResendOtp}
+      isSendingOtp={isSendingOtp}
+      isVerifyingOtp={isVerifyingOtp}
+    />
+    </>
+  );
+}
+
+function OtpModal({ open, otp, setOtp, onClose, onVerify, onResend, isSendingOtp, isVerifyingOtp }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-white">Verify your email</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <p className="text-sm text-slate-400 mb-4">Enter the 6-digit OTP sent to your email.</p>
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+          className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white outline-none focus:border-violet-500 transition"
+          placeholder="Enter 6-digit code"
+        />
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={isSendingOtp}
+            className="text-violet-400 hover:text-violet-300 font-semibold disabled:opacity-60"
+          >
+            {isSendingOtp ? "Sending..." : "Resend code"}
+          </button>
+        </div>
+        <button
+          onClick={onVerify}
+          disabled={isVerifyingOtp}
+          className="mt-5 w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition disabled:opacity-50 flex justify-center"
+        >
+          {isVerifyingOtp ? <Loader2 className="animate-spin" /> : "Submit OTP"}
+        </button>
+      </div>
     </div>
   );
 }

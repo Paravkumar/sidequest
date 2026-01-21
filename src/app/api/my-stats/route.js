@@ -19,7 +19,7 @@ export async function POST(request) {
             .populate('creator', 'name');
 
         const acceptedByIds = postedQuests
-            .map((q) => q.acceptedBy)
+            .flatMap((q) => Array.isArray(q.acceptedBy) ? q.acceptedBy : (q.acceptedBy ? [q.acceptedBy] : []))
             .filter(Boolean);
 
         const acceptedUsers = acceptedByIds.length > 0
@@ -30,9 +30,12 @@ export async function POST(request) {
 
         const postedWithAcceptedUser = postedQuests.map((q) => {
             const quest = q.toObject();
-            if (quest.acceptedBy) {
-                quest.acceptedByUser = acceptedUserMap.get(String(quest.acceptedBy)) || null;
-            }
+            const acceptedList = Array.isArray(quest.acceptedBy)
+                ? quest.acceptedBy
+                : (quest.acceptedBy ? [quest.acceptedBy] : []);
+            quest.acceptedByUsers = acceptedList
+                .map((id) => acceptedUserMap.get(String(id)))
+                .filter(Boolean);
             return quest;
         });
 

@@ -4,7 +4,7 @@ import { Filter } from 'bad-words';
 const filter = new Filter();
 
 // Add custom words to ban (e.g., "sex", "hookup")
-filter.addWords('sex', 'hookup', 'nudes', 'weed', 'drugs','lund','gand','chut','chutad','chutiya','gandu','loda'); 
+filter.addWords('sex', 'hookup', 'nudes', 'weed', 'drugs','lund','gand','chut','chutad','chutiya','gandu','loda','bhenchod','madarchod','randi','behenchod','sassy','sussy','pussy','ciggs','cigarettes','cigars','bong','blunt','cigarette', 'vape','asla','joint','ganja','charas','sassi'); 
 
 export function isProfane(text) {
   if (!text) return false;

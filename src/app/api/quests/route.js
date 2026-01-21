@@ -27,7 +27,10 @@ export async function GET(request) {
         // 1. Identify Roles
         const creatorId = q.creator?._id ? q.creator._id.toString() : String(q.creator);
         const isCreator = currentUserId && creatorId === String(currentUserId);
-        const isAcceptor = currentUserId && String(q.acceptedBy) === String(currentUserId);
+        const acceptedByList = Array.isArray(q.acceptedBy)
+            ? q.acceptedBy.map((id) => String(id))
+            : q.acceptedBy ? [String(q.acceptedBy)] : [];
+        const isAcceptor = currentUserId && acceptedByList.includes(String(currentUserId));
         const isCompleted = q.status === "COMPLETED";
 
         // 2. Split Contact Info
@@ -63,6 +66,11 @@ export async function GET(request) {
         // 4. Handle Name
         if (!q.creator || !q.creator.name) {
             q.creator = { _id: creatorId, name: "Unknown Student" };
+        }
+
+        if (q.slotsRemaining == null) {
+            const totalSlots = Number(q.slots) || 1;
+            q.slotsRemaining = Math.max(totalSlots - acceptedByList.length, 0);
         }
 
         return q;
@@ -110,6 +118,7 @@ export async function POST(request) {
     if (cash > 0 && loot) displayString += " + ";
     if (loot) displayString += loot;
 
+    const slots = Number(body.slots) || 1;
     const newQuest = await Quest.create({
         title,
         description,
@@ -120,7 +129,8 @@ export async function POST(request) {
         community,
         creator: body.creator,
         status: "OPEN",
-        slots: Number(body.slots) || 1
+        slots,
+        slotsRemaining: slots
     });
     
     return NextResponse.json({ success: true, data: newQuest }, { status: 201 });

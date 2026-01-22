@@ -45,8 +45,11 @@ export const authOptions = {
         // This ensures if they just selected a college, the session updates
         await connectDB();
         const freshUser = await User.findById(session.user.id);
-           if (freshUser && freshUser.community) {
-             session.user.community = freshUser.community;
+           if (freshUser) {
+             session.user.community = freshUser.community || session.user.community;
+             session.user.name = freshUser.name || session.user.name;
+             session.user.email = freshUser.email || session.user.email;
+             session.user.phone = freshUser.phone || session.user.phone;
            }
         // -----------------------------
       }

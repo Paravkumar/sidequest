@@ -11,7 +11,7 @@ import QuestChat from "@/components/QuestChat";
 import Pusher from "pusher-js";
 
 export default function Dashboard() {
-  const { data: session, status } = useSession(); 
+  const { data: session, status, update } = useSession(); 
   const router = useRouter();
   const isAdmin = Boolean(
     session?.user?.email &&
@@ -43,6 +43,14 @@ export default function Dashboard() {
   const [onlineCount, setOnlineCount] = useState(0);
   const pusherRef = useRef(null);
   const channelMapRef = useRef(new Map());
+
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
+  const [profileFormData, setProfileFormData] = useState({ name: "", email: "", phone: "" });
+  const [profileError, setProfileError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileOtp, setProfileOtp] = useState("");
+  const [isEmailOtpOpen, setIsEmailOtpOpen] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
   
   const [feedQuests, setFeedQuests] = useState([]); 
   const [myStats, setMyStats] = useState({ posted: [], accepted: [], earnings: 0, loot: [] });
@@ -92,6 +100,12 @@ export default function Dashboard() {
       const rawPhone = session.user.phone.replace("+91 ", "");
       setFormData(prev => ({ ...prev, phone: rawPhone }));
     }
+
+    setProfileFormData({
+      name: session.user.name || "",
+      email: session.user.email || "",
+      phone: (session.user.phone || "").replace("+91 ", "").replace(/^\+?91\s?/, ""),
+    });
 
     if(activeTab === "profile" || activeTab === "chat" || activeTab === "feed") fetchMyStats();
   }, [session, activeTab, status, router]);
@@ -407,6 +421,121 @@ export default function Dashboard() {
     }
   }
 
+  function openProfileEdit() {
+    setProfileError("");
+    setProfileOtp("");
+    setIsEmailOtpOpen(false);
+    setPendingEmail("");
+    setProfileFormData({
+      name: session?.user?.name || "",
+      email: session?.user?.email || "",
+      phone: (session?.user?.phone || "").replace("+91 ", "").replace(/^\+?91\s?/, ""),
+    });
+    setIsProfileEditOpen(true);
+  }
+
+  async function handleProfileSave() {
+    if (!session?.user?.id) return;
+    setProfileSaving(true);
+    setProfileError("");
+    const phoneDigits = String(profileFormData.phone || "").replace(/\D/g, "").slice(0, 10);
+    if (!profileFormData.name.trim()) {
+      setProfileError("Name is required");
+      setProfileSaving(false);
+      return;
+    }
+    if (!profileFormData.email.trim()) {
+      setProfileError("Email is required");
+      setProfileSaving(false);
+      return;
+    }
+    if (phoneDigits.length !== 10) {
+      setProfileError("Phone number must be 10 digits");
+      setProfileSaving(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileFormData.name.trim(),
+          email: profileFormData.email.trim(),
+          phone: `+91 ${phoneDigits}`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setProfileError(json.message || "Failed to update profile");
+        setProfileSaving(false);
+        return;
+      }
+
+      if (json.requiresEmailVerification) {
+        setIsEmailOtpOpen(true);
+        setPendingEmail(json.email || profileFormData.email.trim());
+        if (update) {
+          await update({
+            name: profileFormData.name.trim(),
+            phone: `+91 ${phoneDigits}`,
+          });
+        }
+        setIsProfileEditOpen(false);
+        setProfileSaving(false);
+        return;
+      }
+
+      if (update) {
+        await update({
+          name: profileFormData.name.trim(),
+          email: profileFormData.email.trim(),
+          phone: `+91 ${phoneDigits}`,
+        });
+      }
+      setIsProfileEditOpen(false);
+    } catch (err) {
+      setProfileError("Failed to update profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function handleVerifyEmailChange() {
+    if (!profileOtp.trim()) {
+      setProfileError("Enter the OTP sent to your new email");
+      return;
+    }
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const res = await fetch("/api/user/verify-email-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: profileOtp.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setProfileError(json.message || "Failed to verify email");
+        setProfileSaving(false);
+        return;
+      }
+      if (update) {
+        await update({
+          name: profileFormData.name.trim(),
+          email: json.email || pendingEmail || profileFormData.email.trim(),
+          phone: `+91 ${String(profileFormData.phone || "").replace(/\D/g, "").slice(0, 10)}`,
+        });
+      }
+      setIsEmailOtpOpen(false);
+      setIsProfileEditOpen(false);
+    } catch (err) {
+      setProfileError("Failed to verify email");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function handlePostQuest() {
     setFormError(""); 
 
@@ -494,9 +623,9 @@ export default function Dashboard() {
         <header className="relative z-[9999] flex h-16 items-center justify-between border-b border-white/5 bg-slate-900/50 px-6 backdrop-blur-md">
           <div className="flex items-center gap-4 relative">
             {activeTab === "feed" ? (
-                <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <div className="flex items-center gap-2 text-lg font-bold tracking-tight max-w-[45vw] md:max-w-none">
                     <Globe className="h-5 w-5 text-violet-400" />
-                    {activeCommunity}
+                  <span className="truncate">{activeCommunity}</span>
                 </div>
             ) : activeTab === "chat" ? (
               <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -506,7 +635,7 @@ export default function Dashboard() {
             ) : <h2 className="text-lg font-bold tracking-tight">My Dashboard</h2>}
 
             {activeTab === "feed" && (
-              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
                 Users Online: {onlineCount}
               </span>
             )}
@@ -514,7 +643,7 @@ export default function Dashboard() {
           
           <div className="relative">
              <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-3 hover:bg-white/5 p-1.5 rounded-full transition">
-                <span className="text-sm font-medium text-slate-400 hidden md:block">{session?.user?.name}</span>
+               <span className="text-sm font-medium text-slate-400">{session?.user?.name}</span>
                 <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center font-bold text-xs">
                     {session?.user?.name ? session.user.name[0] : "U"}
                 </div>
@@ -624,6 +753,38 @@ export default function Dashboard() {
 
         {activeTab === "profile" && (
           <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-slate-400">My Details</div>
+                  <div className="text-lg font-bold text-white">Profile</div>
+                </div>
+                <button
+                  onClick={openProfileEdit}
+                  className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 border border-white/10 hover:bg-slate-700"
+                >
+                  Edit Details
+                </button>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 text-sm text-slate-300">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase">Name</div>
+                  <div className="font-semibold text-white break-words">{session?.user?.name || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase">Email</div>
+                  <div className="font-semibold text-white break-words">{session?.user?.email || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase">Phone</div>
+                  <div className="font-semibold text-white break-words">{session?.user?.phone || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase">Community</div>
+                  <div className="font-semibold text-white break-words">{session?.user?.community || "—"}</div>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-2xl bg-gradient-to-br from-emerald-900/50 to-slate-900 border border-emerald-500/30 p-6">
                     <div className="flex items-center gap-2 mb-2 text-emerald-400"><Wallet className="h-5 w-5" /><span className="font-bold text-xs tracking-wider uppercase">Cash Earned</span></div>
@@ -870,6 +1031,92 @@ export default function Dashboard() {
                 <button onClick={() => { setIsCompleteOpen(false); setCompleteQuestId(null); }} className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold transition">Cancel</button>
                 <button onClick={confirmCompleteQuest} className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition">Confirm</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {isProfileEditOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white">Edit Profile</h3>
+                <button onClick={() => setIsProfileEditOpen(false)}><X className="h-6 w-6 text-slate-400" /></button>
+              </div>
+
+              {profileError && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-xs text-center">
+                  {profileError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase">Full Name *</label>
+                  <input
+                    type="text"
+                    value={profileFormData.name}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, name: e.target.value })}
+                    className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase">Email *</label>
+                  <input
+                    type="email"
+                    value={profileFormData.email}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, email: e.target.value })}
+                    className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase">Phone (+91) *</label>
+                  <input
+                    type="text"
+                    value={profileFormData.phone}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    className="mt-1 w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleProfileSave}
+                disabled={profileSaving}
+                className="mt-6 w-full flex justify-center items-center rounded-xl bg-violet-600 py-3.5 font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                {profileSaving ? <Loader2 className="animate-spin" /> : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isEmailOtpOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">Verify new email</h3>
+                <button onClick={() => { setIsEmailOtpOpen(false); setProfileOtp(""); }} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">Enter the OTP sent to {pendingEmail || profileFormData.email.trim()}.</p>
+              {profileError && (
+                <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-xs text-center">
+                  {profileError}
+                </div>
+              )}
+              <input
+                type="text"
+                value={profileOtp}
+                onChange={(e) => setProfileOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Enter OTP"
+                className="w-full rounded-lg bg-slate-800 border border-white/10 p-3 text-white outline-none"
+              />
+              <button
+                onClick={handleVerifyEmailChange}
+                disabled={profileSaving}
+                className="mt-5 w-full flex justify-center items-center rounded-xl bg-violet-600 py-3 font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                {profileSaving ? <Loader2 className="animate-spin" /> : "Verify Email"}
+              </button>
             </div>
           </div>
         )}
